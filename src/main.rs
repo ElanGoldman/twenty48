@@ -1,8 +1,10 @@
 mod game;
 mod history;
+mod leaderboard;
 
 use eframe::egui;
 use game::{Direction, Game};
+use leaderboard::Leaderboard;
 
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
@@ -16,7 +18,7 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "rust_2048",
         options,
-        Box::new(|_cc| Ok(Box::new(App::default()))),
+        Box::new(|cc| Ok(Box::new(App::new(cc)))),
     )
 }
 
@@ -24,25 +26,35 @@ struct App {
     game: Game,
     board_size_input: String,
     status_message: String,
+    leaderboard: Leaderboard,
+    score_saved: bool,
 }
 
-impl Default for App {
-    fn default() -> Self {
+impl App {
+    fn new(cc: &eframe::CreationContext) -> Self {
+        let leaderboard = cc
+            .storage
+            .map(|s| Leaderboard::load(s))
+            .unwrap_or_default();
         let size = 4;
         Self {
             game: Game::new(size),
             board_size_input: size.to_string(),
             status_message: String::new(),
+            leaderboard,
+            score_saved: false,
         }
     }
-}
 
-impl App {
     fn try_start_new_game(&mut self) {
+        if !self.score_saved && self.game.score > 0 {
+            self.leaderboard.add_score(self.game.score, self.game.size);
+        }
         match self.board_size_input.trim().parse::<usize>() {
             Ok(size) if size >= 2 => {
                 self.game = Game::new(size);
                 self.status_message = format!("Started new {}x{} game.", size, size);
+                self.score_saved = false;
             }
             _ => {
                 self.status_message = "Board size must be an integer >= 2.".to_string();
@@ -165,6 +177,44 @@ impl App {
                     });
             });
     }
+
+    fn draw_leaderboard_popup(&mut self, ctx: &egui::Context) {
+        if !self.leaderboard.show {
+            return;
+        }
+
+        let mut show = self.leaderboard.show;
+        egui::Window::new("Leaderboard")
+            .open(&mut show)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .show(ctx, |ui| {
+                ui.set_min_width(280.0);
+
+                if self.leaderboard.entries.is_empty() {
+                    ui.label("No scores yet. Play a game to get on the board!");
+                } else {
+                    egui::Grid::new("leaderboard_grid")
+                        .striped(true)
+                        .spacing([24.0, 6.0])
+                        .show(ui, |ui| {
+                            ui.strong("Rank");
+                            ui.strong("Score");
+                            ui.strong("Board");
+                            ui.end_row();
+
+                            for (i, entry) in self.leaderboard.entries.iter().enumerate() {
+                                ui.label(format!("#{}", i + 1));
+                                ui.label(entry.score.to_string());
+                                ui.label(format!("{}x{}", entry.board_size, entry.board_size));
+                                ui.end_row();
+                            }
+                        });
+                }
+            });
+        self.leaderboard.show = show;
+    }
 }
 
 impl eframe::App for App {
@@ -182,6 +232,12 @@ impl eframe::App for App {
         }
         if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::S)) {
             self.handle_move(Direction::Down);
+        }
+
+        if !self.score_saved && !self.game.can_make_any_move() {
+            self.leaderboard.add_score(self.game.score, self.game.size);
+            self.score_saved = true;
+            self.leaderboard.show = true;
         }
 
         egui::CentralPanel::default().show_inside(ui, |ui| {
@@ -206,6 +262,10 @@ impl eframe::App for App {
 
                 if ui.button("New Game").clicked() {
                     self.try_start_new_game();
+                }
+
+                if ui.button("Leaderboard").clicked() {
+                    self.leaderboard.show = !self.leaderboard.show;
                 }
             });
 
@@ -257,5 +317,11 @@ impl eframe::App for App {
             ui.add_space(8.0);
             ui.label("Controls: Arrow keys or WASD");
         });
+
+        self.draw_leaderboard_popup(&ctx);
+    }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        self.leaderboard.save(storage);
     }
 }
