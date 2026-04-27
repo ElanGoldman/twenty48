@@ -139,8 +139,9 @@ impl App {
                 egui::Grid::new("board_grid")
                     .spacing([gap, gap])
                     .show(ui, |ui| {
-                        for row in &self.game.board {
-                            for &cell in row {
+                        for r in 0..self.game.size {
+                            for c in 0..self.game.size {
+                                let cell = self.game.board[(r, c)];
                                 let (bg, fg) = Self::tile_colors(cell);
                                 let text = if cell == 0 {
                                     "".to_string()

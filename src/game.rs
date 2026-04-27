@@ -1,3 +1,4 @@
+use grid::Grid;
 use rand::prelude::*;
 
 use crate::history::GameSnapshot;
@@ -12,7 +13,7 @@ pub enum Direction {
 
 #[derive(Debug, Clone)]
 pub struct Game {
-    pub board: Vec<Vec<u32>>,
+    pub board: Grid<u32>,
     pub size: usize,
     pub score: u32,
     pub undo_stack: Vec<GameSnapshot>,
@@ -25,7 +26,7 @@ impl Game {
         assert!(size >= 2, "Board size must be at least 2");
 
         let mut game = Self {
-            board: vec![vec![0; size]; size],
+            board: Grid::new(size, size),
             size,
             score: 0,
             undo_stack: Vec::new(),
@@ -107,18 +108,18 @@ impl Game {
     }
 
     pub fn can_make_any_move(&self) -> bool {
-        if self.board.iter().flatten().any(|&x| x == 0) {
+        if self.board.iter().any(|&x| x == 0) {
             return true;
         }
 
         for r in 0..self.size {
             for c in 0..self.size {
-                let val = self.board[r][c];
+                let val = self.board[(r, c)];
 
-                if r + 1 < self.size && self.board[r + 1][c] == val {
+                if r + 1 < self.size && self.board[(r + 1, c)] == val {
                     return true;
                 }
-                if c + 1 < self.size && self.board[r][c + 1] == val {
+                if c + 1 < self.size && self.board[(r, c + 1)] == val {
                     return true;
                 }
             }
@@ -128,13 +129,16 @@ impl Game {
     }
 
     pub fn has_tile(&self, target: u32) -> bool {
-        self.board.iter().flatten().any(|&x| x == target)
+        self.board.iter().any(|&x| x == target)
     }
 
     fn move_left(&mut self) {
         for r in 0..self.size {
-            let (new_row, gained_score) = Self::compress_and_merge_row(&self.board[r]);
-            self.board[r] = new_row;
+            let row: Vec<u32> = self.board.iter_row(r).copied().collect();
+            let (new_row, gained_score) = Self::compress_and_merge_row(&row);
+            for (c, val) in new_row.into_iter().enumerate() {
+                self.board[(r, c)] = val;
+            }
             self.score += gained_score;
         }
     }
@@ -169,7 +173,7 @@ impl Game {
 
         for r in 0..self.size {
             for c in 0..self.size {
-                if self.board[r][c] == 0 {
+                if self.board[(r, c)] == 0 {
                     empty_cells.push((r, c));
                 }
             }
@@ -183,22 +187,14 @@ impl Game {
         let &(r, c) = empty_cells.choose(&mut rng).unwrap();
         let value = if rng.random_bool(0.9) { 2 } else { 4 };
 
-        self.board[r][c] = value;
+        self.board[(r, c)] = value;
     }
 
     fn reverse_rows(&mut self) {
-        for row in &mut self.board {
-            row.reverse();
-        }
+        self.board.flip_cols();
     }
 
     fn transpose(&mut self) {
-        for r in 0..self.size {
-            for c in (r + 1)..self.size {
-                let temp = self.board[r][c];
-                self.board[r][c] = self.board[c][r];
-                self.board[c][r] = temp;
-            }
-        }
+        self.board.transpose();
     }
 }

@@ -1,8 +1,10 @@
+use grid::Grid;
+
 use crate::game::Game;
 
 #[derive(Debug, Clone)]
 pub struct GameSnapshot {
-    pub board: Vec<Vec<u32>>,
+    pub board: Grid<u32>,
     pub score: u32,
 }
 

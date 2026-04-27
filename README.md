@@ -53,12 +53,15 @@ storage
 
 `and_then` flat-maps over the `Option`, `.ok()` converts the `Result` to an `Option`, and `unwrap_or_default()` produces a blank leaderboard if anything along the chain is `None`.
 
-### Iterator Adapters and `flatten`
-The board is a `Vec<Vec<u32>>`. Iterating every cell uses `.iter().flatten()` to turn nested iterators into a single flat iterator, followed by combinators like `.any()`, `.filter()`, and `.copied()`:
+### External Crate: `grid`
+The board is stored as a `Grid<u32>` from the [`grid`](https://crates.io/crates/grid) crate rather than a nested `Vec<Vec<u32>>`. `Grid` stores its data in a single flat allocation, so there is no pointer chasing between rows. It also provides built-in `transpose()` and `flip_cols()` methods that replace the hand-rolled matrix manipulation that would otherwise be needed.
+
+### Iterator Adapters
+`Grid::iter()` yields every cell as a flat sequence with no need for `flatten()`. Iterator combinators like `.any()`, `.filter()`, and `.copied()` are used throughout:
 
 ```rust
-self.board.iter().flatten().any(|&x| x == 0)  // any empty cell?
-row.iter().copied().filter(|&x| x != 0).collect()  // strip zeros from a row
+self.board.iter().any(|&x| x == 0)              // any empty cell?
+row.iter().copied().filter(|&x| x != 0).collect() // strip zeros from a row
 ```
 
 ### Associated Constants
@@ -93,7 +96,7 @@ Rather than writing four separate slide algorithms, all four directions are redu
 - **Up** = transpose → move left → transpose  
 - **Down** = transpose → reverse rows → move left → reverse rows → transpose  
 
-This is a clean algorithmic use of mutable references and in-place `Vec` manipulation without any extra allocation for the board itself.
+The `grid` crate's built-in `transpose()` and `flip_cols()` methods make each transformation a single call, keeping the direction logic concise.
 
 ---
 
